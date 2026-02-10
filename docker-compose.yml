@@ -1,21 +1,22 @@
 services:
   library-events:
   # TODO:
-  #   - добавить $SERTIFICATE_EMAIL на сервере
-  #   - уточнить причину не hard-coded PORT=3000
+  #   - Упаковать файлы в отдельную директорию
+  #   - добавить $DEFAULT_EMAIL на сервере
     build:
-      context: .
+      context: ./vbkg
       dockerfile: vbkg.Dockerfile
     image: library-events
     container_name: library-events-container
     expose:
-      - "3000"  # Проброс порта внутри сети Docker
+      - "3000"  # Проброс порта внутри сети Docker\
     environment:
-      # - VIRTUAL_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru
-      # - LETSENCRYPT_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru
-      - VIRTUAL_HOST=test.pr-cbs.ru,www.test.pr-cbs.ru
-      - LETSENCRYPT_HOST=test.pr-cbs.ru,www.test.pr-cbs.ru
-      - LETSENCRYPT_EMAIL=${SERTIFICATE_EMAIL}
+      # Виртуальный хост сервера
+      - VIRTUAL_HOST=${VIRTUAL_HOST}
+      # Хост для сертификации acme-companion
+      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
+      # Почта для сертификации
+      - LETSENCRYPT_EMAIL=${DEFAULT_EMAIL}
       - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
       - JWT_SECRET=${JWT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL}
@@ -24,12 +25,12 @@ services:
       # Монтируем том для хранения данных
       - db_data:/usr/src/app/data
       # Монтируем .env файл из хост-системы
-      - .env:/usr/src/app/server/.env
+      - /vbkg/.env:/usr/src/app/server/.env
       # Монтируем том для хранения изображений
       - server_uploads:/usr/src/app/server/uploads
     # restart: unless-stopped
 
-  nginx-proxy: # Замена nginx для работы с acme-companion
+  nginx-proxy: # Замена nginx  на nginx-proxy для работы с acme-companion
     build:
       context: ./nginx-proxy
       dockerfile: nginx-proxy.Dockerfile
@@ -41,31 +42,39 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/tmp/docker.sock:ro
+      # Том для хранения сертификатов
       - certs:/etc/nginx/certs
+      # Том для хранения виртуальных хостов
       - vhost:/etc/nginx/vhost.d
+      # Том для хранения статики
       - html:/usr/share/nginx/html
-    # restart: unless-stopped
+    restart: unless-stopped
 
-  acme-companion: # Контейнер для автоматической сертификации
+  acme-companion: # Контейнер автоматической сертификации
   # TODO:
-  #   - добавить $SERTIFICATE_EMAIL на сервере
+  #   - добавить $DEFAULT_EMAIL на сервере
+  #   - создать и подключить параметры из .env !!! (при развётрывании не было чтения)
     image: nginxproxy/acme-companion
+
     container_name: nginx-proxy-acme
     depends_on:
       - nginx-proxy
-    env_file:
-      - .env
     environment:
-      - DEFAULT_EMAIL=${SERTIFICATE_EMAIL}
+      # Почта для сертификации
+      - DEFAULT_EMAIL=${DEFAULT_EMAIL}
     volumes_from:
+      # Подключаем томы из nginx-proxy
       - nginx-proxy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Том для хранения сертификатов
       - certs:/etc/nginx/certs
+      # Том для хранения виртуальных хостов для сертификации
       - vhost:/etc/nginx/vhost.d
+      # Том для хранения статики
       - html:/usr/share/nginx/html
       - acme:/etc/acme.sh
-    # restart: unless-stopped
+    restart: unless-stopped
 
 volumes:
   acme:

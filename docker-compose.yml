@@ -16,7 +16,7 @@ services:
       # Хост для сертификации acme-companion
       - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
       # Почта для сертификации
-      - LETSENCRYPT_EMAIL=${DEFAULT_EMAIL}
+      - LETSENCRYPT_EMAIL=${SERTIFICATE_EMAIL}
       - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
       - JWT_SECRET=${JWT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL}
@@ -61,7 +61,7 @@ services:
       - nginx-proxy
     environment:
       # Почта для сертификации
-      - DEFAULT_EMAIL=${DEFAULT_EMAIL}
+      - DEFAULT_EMAIL=${SERTIFICATE_EMAIL}
     volumes_from:
       # Подключаем томы из nginx-proxy
       - nginx-proxy

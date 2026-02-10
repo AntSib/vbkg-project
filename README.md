@@ -2,27 +2,31 @@
 - Добавлен контейнер с acme-companion
 - Замена nginx на nginx-proxy (для работы с acme-companion)
 - В контейнере library-events добавлены переменные окружения:
-      * ```VIRTUAL_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru``` - определение домена
-      * ```LETSENCRYPT_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru``` - домены для сертификации
-      * ```LETSENCRYPT_EMAIL=${SERTIFICATE_EMAIL}``` - email для сертификации (требуется добавить в конфигурацию на сервере)
+      * ```VIRTUAL_HOST=${VIRTUAL_HOST}``` - определение домена
+      * ```LETSENCRYPT_HOST=${LETSENCRYPT_HOST}``` - домены для сертификации
+      * ```LETSENCRYPT_EMAIL=${SERTIFICATE_EMAIL}``` - email для сертификации
 
 ## Структура
-- Конфигурация nginx-proxy перенесена в nginx-proxy/conf.d/*
+- Файлы Express перенесены в vbkg
+- Файлы nginx-proxy перенесены в nginx-proxy
+- Конфигурация nginx-proxy находится в nginx-proxy/conf.d/
 
 ```
 project/
 ├─ docker-compose.yml
-├─ package.json
-├─ package-lock.json
-├─ vbkg-pr-cbs-ru.conf
-├─ vbkg.Dockerfile
-├─ nginx-proxy/
-│  └─ conf.d/ 
-│     └─ nginx.conf 
-├─ data/
-│  └─ db.json
-├─ public/
-│  └─ ***
-└─ server/
-    └─ ***
+├─ vbkg/
+│  ├─ vbkg.Dockerfile
+│  ├─ vbkg-pr-cbs-ru.conf
+│  ├─ package.json
+│  ├─ package-lock.json
+│  ├─ data/
+│  │  └─ db.json
+│  ├─ public/
+│  │  └─ ***
+│  └─ server/
+│     └─ ***
+└─ nginx-proxy/
+   ├─ nginx-proxy.Dockerfile
+   └─ conf.d/
+      └─ nginx.conf
 ```

@@ -11,8 +11,10 @@ services:
     expose:
       - "3000"  # Проброс порта внутри сети Docker
     environment:
-      - VIRTUAL_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru
-      - LETSENCRYPT_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru
+      # - VIRTUAL_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru
+      # - LETSENCRYPT_HOST=vbkg.pr-cbs.ru,www.vbkg.pr-cbs.ru
+      - VIRTUAL_HOST=test.pr-cbs.ru,www.test.pr-cbs.ru
+      - LETSENCRYPT_HOST=test.pr-cbs.ru,www.test.pr-cbs.ru
       - LETSENCRYPT_EMAIL=${SERTIFICATE_EMAIL}
       - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
       - JWT_SECRET=${JWT_SECRET}

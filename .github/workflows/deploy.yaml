@@ -23,8 +23,7 @@ jobs:
       - name: Ensure known hosts
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          echo "${{ secrets.SSH_HOST }}" > ~/.ssh/known_hosts
 
       # Создание бэкапа
       - name: Create backup on server

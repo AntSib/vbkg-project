@@ -66,8 +66,7 @@ jobs:
             
             set -e
 
-            BASE_DIR="\$HOME/vbkg"
-            cd "\$BASE_DIR"
+            cd "\$HOME/vbkg"
 
             touch .env
 

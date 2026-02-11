@@ -39,7 +39,7 @@ jobs:
           APP_DIR="vbkg"
           BACKUP_NAME="backup_$(date +%Y%m%d_%H%M%S).tar.gz"
 
-          echo "===== Preparing directory and backup ====="
+          # "===== Preparing directory and backup ====="
 
           ssh -p $SSH_PORT $REMOTE << 'EOF'
             set -e
@@ -63,7 +63,7 @@ jobs:
           EOF
 
 
-          echo "===== Updating ENV variables ====="
+          # "===== Updating ENV variables ====="
 
           ssh -p $SSH_PORT $REMOTE << EOF
             set -e
@@ -87,7 +87,7 @@ jobs:
           EOF
 
 
-          echo "===== Sync project files ====="
+          # "===== Sync project files ====="
 
           rsync -az \
             --delete \
@@ -97,7 +97,7 @@ jobs:
             -e "ssh -p $SSH_PORT" \
             ./ $REMOTE:~/vbkg/
 
-          echo "===== Running docker compose ====="
+          # "===== Running docker compose ====="
 
           ssh -p $SSH_PORT $REMOTE << 'EOF'
             set -e
@@ -108,7 +108,7 @@ jobs:
           EOF
 
 
-          echo "===== Cleanup unwanted files ====="
+          # "===== Cleanup unwanted files ====="
 
           ssh -p $SSH_PORT $REMOTE << 'EOF'
             cd ~/vbkg
@@ -118,7 +118,7 @@ jobs:
           EOF
 
 
-          echo "===== Removing previous backup ====="
+          # "===== Removing previous backup ====="
 
           ssh -p $SSH_PORT $REMOTE << 'EOF'
             cd ~/vbkg
@@ -146,7 +146,7 @@ jobs:
 
           REMOTE="${SSH_USER}@${SSH_HOST}"
 
-          echo "===== ROLLBACK STARTED ====="
+          # "===== ROLLBACK STARTED ====="
 
           ssh -p $SSH_PORT $REMOTE << 'EOF'
             set -e

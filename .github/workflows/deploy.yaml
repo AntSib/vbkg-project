@@ -63,6 +63,12 @@ jobs:
       - name: Setup .env file
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+            
+            set -e
+
+            BASE_DIR="\$HOME/vbkg"
+            cd "\$BASE_DIR"
+
             touch .env
 
             update_env_var () {

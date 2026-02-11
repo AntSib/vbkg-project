@@ -19,7 +19,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      # Установка ssh-ключа
+      # Внесение нужного хоста
       - name: Ensure known hosts
         run: |
           mkdir -p ~/.ssh

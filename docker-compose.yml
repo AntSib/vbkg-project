@@ -4,30 +4,32 @@ services:
   #   - Упаковать файлы в отдельную директорию
   #   - добавить $DEFAULT_EMAIL на сервере
     build:
-      context: ./vbkg
+      context: ./vbkg_server
       dockerfile: vbkg.Dockerfile
     image: library-events
     container_name: library-events-container
     expose:
-      - "3000"  # Проброс порта внутри сети Docker\
+      - "3000"  # Проброс порта внутри сети Docker
+    env_file:
+      - .env
     environment:
       # Виртуальный хост сервера
-      - VIRTUAL_HOST=${VIRTUAL_HOST}
+      - VIRTUAL_HOST
       # Хост для сертификации acme-companion
-      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
+      - LETSENCRYPT_HOST
       # Почта для сертификации
-      - LETSENCRYPT_EMAIL=${SERTIFICATE_EMAIL}
+      - LETSENCRYPT_EMAIL
+      - PORT
       - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
       - JWT_SECRET=${JWT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL}
-      - PORT=${PORT}
     volumes:
       # Монтируем том для хранения данных
       - db_data:/usr/src/app/data
       # Монтируем .env файл из хост-системы
       - /vbkg/.env:/usr/src/app/server/.env
       # Монтируем том для хранения изображений
-      - server_uploads:/usr/src/app/server/uploads
+      - server_uploads:/usr/src/app/server/uploads    
     # restart: unless-stopped
 
   nginx-proxy: # Замена nginx  на nginx-proxy для работы с acme-companion
@@ -48,20 +50,21 @@ services:
       - vhost:/etc/nginx/vhost.d
       # Том для хранения статики
       - html:/usr/share/nginx/html
-    restart: unless-stopped
+    # restart: unless-stopped
 
   acme-companion: # Контейнер автоматической сертификации
   # TODO:
   #   - добавить $DEFAULT_EMAIL на сервере
   #   - создать и подключить параметры из .env !!! (при развётрывании не было чтения)
     image: nginxproxy/acme-companion
-
     container_name: nginx-proxy-acme
     depends_on:
       - nginx-proxy
+    env_file:
+      - .env
     environment:
       # Почта для сертификации
-      - DEFAULT_EMAIL=${SERTIFICATE_EMAIL}
+      - LETSENCRYPT_EMAIL
     volumes_from:
       # Подключаем томы из nginx-proxy
       - nginx-proxy
@@ -74,7 +77,7 @@ services:
       # Том для хранения статики
       - html:/usr/share/nginx/html
       - acme:/etc/acme.sh
-    restart: unless-stopped
+    # restart: unless-stopped
 
 volumes:
   acme:

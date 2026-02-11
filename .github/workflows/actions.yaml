@@ -5,6 +5,19 @@ on:
     branches:
       - production
 
+# TODO Jobs list
+# - checkout
+# - setup-ssh (add SSH key to server and repo secrets)
+# - make dir vbkg on server
+# - change dir to vbkg
+# - setup? .env file
+# - backup container/files (tar)
+# - scp or rsync? files
+# - docker compose down
+# - docker compose up --build
+# - ???
+# - profit
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest

@@ -24,7 +24,7 @@ jobs:
       # Создание бэкапа
       - name: Create backup on server
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             set -e
 
             BASE_DIR="\$HOME/vbkg"
@@ -63,13 +63,13 @@ jobs:
             --exclude '.git' \
             --exclude '.github' \
             ./ \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/vbkg/
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/vbkg/
 
       # Запуск контейнера
       - name: Deploy Docker
         id: deploy_step
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             set -e
             cd ~/vbkg
 
@@ -87,7 +87,7 @@ jobs:
       - name: Rollback if failed
         if: failure()
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             cd ~/vbkg
 
             echo "Deployment failed. Starting rollback..."

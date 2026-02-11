@@ -31,11 +31,7 @@ jobs:
       # Создание бэкапа
       - name: Create backup on server
         run: |
-          ssh -o StrictHostKeyChecking=yes \
-              -i ~/.ssh/id_rsa \
-              ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-              "bash -s" << 'EOF'
-            
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             set -e
 
             BASE_DIR="\$HOME/vbkg"

@@ -28,7 +28,7 @@ jobs:
       # Создание бэкапа
       - name: Create backup on server
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             
             set -e
 

@@ -18,6 +18,9 @@ jobs:
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # Настройка known hosts
+      - name: Ensure known hosts
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh

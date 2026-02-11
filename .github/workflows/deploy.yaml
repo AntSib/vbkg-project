@@ -15,158 +15,112 @@ jobs:
 
       # Настройка SSH
       - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # Настройка known hosts
+      - name: Ensure known hosts
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      # Деплой
-      - name: Deploy to server
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
+          ssh-keyscan -p 22 -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
-          VIRTUAL_HOST: ${{ secrets.VIRTUAL_HOST }}
-          LETSENCRYPT_HOST: ${{ secrets.LETSENCRYPT_HOST }}
-          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
-          PORT: ${{ secrets.PORT }}
-
+      # Создание бэкапа
+      - name: Create backup on server
         run: |
-
-          REMOTE="${SSH_USER}@${SSH_HOST}"
-          APP_DIR="vbkg"
-          BACKUP_NAME="backup_$(date +%Y%m%d_%H%M%S).tar.gz"
-
-          echo "===== Preparing directory and backup ====="
-
-          ssh -p $SSH_PORT $REMOTE << 'EOF'
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+            
             set -e
 
-            APP_DIR="vbkg"
+            BASE_DIR="\$HOME/vbkg"
+            TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
+            BACKUP_FILE="backup_\${TIMESTAMP}.tar.gz"
 
-            mkdir -p ~/$APP_DIR
-            cd ~/$APP_DIR
+            mkdir -p "\$BASE_DIR"
+            cd "\$BASE_DIR"
 
-            BACKUP_NAME="backup_$(date +%Y%m%d_%H%M%S).tar.gz"
-
-            if [ "$(ls -A . 2>/dev/null)" ]; then
-              tar -czf "$BACKUP_NAME" .
-              echo "$BACKUP_NAME" > .last_backup
-            fi
-
-            # Создание .env если отсутствует
-            if [ ! -f .env ]; then
-              touch .env
+            if [ "\$(ls -A . 2>/dev/null)" ]; then
+              tar -czf "\$BACKUP_FILE" .
             fi
           EOF
 
+      # Синхронизирование файлов
+      - name: Rsync project to server
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            ./ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/vbkg/
 
-          echo "===== Updating ENV variables ====="
-
-          ssh -p $SSH_PORT $REMOTE << EOF
+      # Настройка .env
+      - name: Setup .env file
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+            
             set -e
-            cd ~/vbkg
 
-            update_env() {
-              KEY=\$1
-              VALUE=\$2
+            cd "\$HOME/vbkg"
 
-              if grep -q "^\$KEY=" .env; then
-                sed -i "s|^\$KEY=.*|\$KEY=\$VALUE|" .env
+            touch .env
+
+            update_env_var () {
+              VAR_NAME=\$1
+              VAR_VALUE=\$2
+              if grep -q "^\${VAR_NAME}=" .env; then
+                sed -i "s|^\${VAR_NAME}=.*|\${VAR_NAME}=\${VAR_VALUE}|" .env
               else
-                echo "\$KEY=\$VALUE" >> .env
+                echo "\${VAR_NAME}=\${VAR_VALUE}" >> .env
               fi
             }
 
-            update_env "VIRTUAL_HOST" "$VIRTUAL_HOST"
-            update_env "LETSENCRYPT_HOST" "$LETSENCRYPT_HOST"
-            update_env "LETSENCRYPT_EMAIL" "$LETSENCRYPT_EMAIL"
-            update_env "PORT" "$PORT"
+            update_env_var "VIRTUAL_HOST" "${{ secrets.VIRTUAL_HOST }}"
+            update_env_var "LETSENCRYPT_HOST" "${{ secrets.LETSENCRYPT_HOST }}"
+            update_env_var "LETSENCRYPT_EMAIL" "${{ secrets.LETSENCRYPT_EMAIL }}"
+            update_env_var "PORT" "${{ secrets.PORT }}"
           EOF
 
-
-          echo "===== Sync project files ====="
-
-          rsync -az \
-            --delete \
-            --exclude ".git" \
-            --exclude ".github" \
-            --exclude ".env" \
-            -e "ssh -p $SSH_PORT" \
-            ./ $REMOTE:~/vbkg/
-
-          echo "===== Running docker compose ====="
-
-          ssh -p $SSH_PORT $REMOTE << 'EOF'
+      # Запуск контейнера
+      - name: Deploy Docker
+        id: deploy_step
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             set -e
             cd ~/vbkg
 
             docker compose down
-            docker compose up -d --build
-          EOF
-
-
-          echo "===== Cleanup unwanted files ====="
-
-          ssh -p $SSH_PORT $REMOTE << 'EOF'
-            cd ~/vbkg
+            docker compose up --build -d
 
             rm -f vbkg_server/vbkg-pr-cbs-ru-ssl.conf
             rm -f nginx-proxy/conf.d/nginx.conf
+
+            # Remove old backups (keep newest)
+            ls -t backup_*.tar.gz | tail -n +2 | xargs -r rm -f
           EOF
-
-
-          echo "===== Removing previous backup ====="
-
-          ssh -p $SSH_PORT $REMOTE << 'EOF'
-            cd ~/vbkg
-
-            if [ -f .last_backup ]; then
-              LAST=$(cat .last_backup)
-
-              for f in backup_*.tar.gz; do
-                if [ "$f" != "$LAST" ]; then
-                  rm -f "$f"
-                fi
-              done
-            fi
-          EOF
-
 
       # Rollback при ошибке
-      - name: Rollback on failure
+      - name: Rollback if failed
         if: failure()
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
         run: |
-
-          REMOTE="${SSH_USER}@${SSH_HOST}"
-
-          echo "===== ROLLBACK STARTED ====="
-
-          ssh -p $SSH_PORT $REMOTE << 'EOF'
-            set -e
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             cd ~/vbkg
 
-            if [ -f .last_backup ]; then
+            echo "Deployment failed. Starting rollback..."
 
-              BACKUP=$(cat .last_backup)
+            LATEST_BACKUP=\$(ls -t backup_*.tar.gz | head -n 1)
 
-              echo "Restoring from $BACKUP"
-
-              find . -mindepth 1 ! -name "$BACKUP" ! -name ".last_backup" -exec rm -rf {} +
-
-              tar -xzf "$BACKUP"
-
-              docker compose down
-              docker compose up -d --build
-
+            if [ -f "\$LATEST_BACKUP" ]; then
+              tar -xzf "\$LATEST_BACKUP"
+              docker compose down || true
+              docker compose up --build -d
+              echo "Rollback completed."
             else
-              echo "No backup found!"
-              exit 1
+              echo "No backup found."
             fi
           EOF

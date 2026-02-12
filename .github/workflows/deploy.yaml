@@ -70,23 +70,6 @@ jobs:
             echo "Environment variables updated successfully."
           EOF
 
-      # Запуск контейнера
-      - name: Deploy Docker Container
-        id: deploy_step
-        run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
-            set -e
-            cd ~/vbkg
-
-            docker compose down
-            docker compose up --build -d
-
-            # Remove old backups (select all but the last one made)
-            ls -t backup_*.tar.gz | tail -n +2 | xargs -r rm -f
-
-            echo "Deployment completed."
-          EOF
-
       # Создание бэкапа
       - name: Create Backup
         run: |
@@ -110,6 +93,32 @@ jobs:
             echo "Backup created: \$BACKUP_FILE in \$BACKUP_DIR"
           EOF
 
+      # Запуск контейнера
+      - name: Deploy Docker Container
+        id: deploy_step
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+            set -e
+            cd ~/vbkg
+
+            docker compose down
+            docker compose up --build -d
+
+            # Remove old backups (select all but the last one made)
+            ls -t backup_*.tar.gz | tail -n +2 | xargs -r rm -f
+
+            echo "Deployment completed."
+          EOF
+
+      # Удаление старых бэкапов
+      - name: Clean Up Old Backups
+        if: succses()
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+            cd ~/vbkg_backup
+            ls -t backup_*.tar.gz | tail -n +2 | xargs -r rm -f
+          EOF
+  
       # Rollback при ошибке
       - name: Rollback
         if: failure()

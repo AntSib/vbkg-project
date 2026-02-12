@@ -112,7 +112,7 @@ jobs:
 
       # Удаление старых бэкапов
       - name: Clean Up Old Backups
-        if: succses()
+        if: success()
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             cd ~/vbkg_backup

@@ -120,10 +120,11 @@ jobs:
 
             echo "Deployment failed. Starting rollback..."
 
-            PREV_BACKUP=\$(ls -t backup_*.tar.gz | head -n 1)
+            # Get the name of the second most recent backup
+            PREV_BACKUP=\$(ls -t backup_*.tar.gz | head -n 2 | tail -n 1)
 
             # Remove backup of last rsync
-            ls -t backup_*.tar.gz | tail -n +2 | xargs -r rm -f
+            ls -t backup_*.tar.gz | head -n 1 | xargs -r rm -f
 
             # Restore files from previous backup
             if [ -f "\$PREV_BACKUP" ]; then

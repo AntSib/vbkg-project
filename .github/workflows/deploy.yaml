@@ -86,9 +86,7 @@ jobs:
 
             # Check if vbkg directory is not empty
             if [ "\$(ls -A . 2>/dev/null)" ]; then
-              tar -czf "\$BACKUP_FILE" \
-              --exclude="*.tar.gz" \
-              .
+              tar -czf "\$BACKUP_FILE" .
             fi
 
             echo "Backup created: \$BACKUP_FILE"

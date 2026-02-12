@@ -20,7 +20,7 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       # Настройка known hosts
-      - name: Ensure known hosts
+      - name: Ensure Known Hosts
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
@@ -31,36 +31,18 @@ jobs:
           ssh-keyscan -p 22 -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      # Создание бэкапа
-      - name: Create backup on server
-        run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
-            
-            set -e
-
-            BASE_DIR="\$HOME/vbkg"
-            TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
-            BACKUP_FILE="backup_\${TIMESTAMP}.tar.gz"
-
-            mkdir -p "\$BASE_DIR"
-            cd "\$BASE_DIR"
-
-            if [ "\$(ls -A . 2>/dev/null)" ]; then
-              tar -czf "\$BACKUP_FILE" .
-            fi
-          EOF
-
       # Синхронизирование файлов
-      - name: Rsync project to server
+      - name: Rsync to Server
         run: |
           rsync -az --delete \
             --exclude '.git' \
             --exclude '.github' \
+            --exclude 'backup_*.tar.gz' \
             ./ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/vbkg/
 
       # Настройка .env
-      - name: Setup .env file
+      - name: Setup .env
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
             
@@ -84,10 +66,36 @@ jobs:
             update_env_var "LETSENCRYPT_HOST" "${{ secrets.LETSENCRYPT_HOST }}"
             update_env_var "LETSENCRYPT_EMAIL" "${{ secrets.LETSENCRYPT_EMAIL }}"
             update_env_var "PORT" "${{ secrets.PORT }}"
+
+            echo "Environment variables updated successfully."
+          EOF
+
+      # Создание бэкапа
+      - name: Create Backup
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+            
+            set -e
+
+            BASE_DIR="\$HOME/vbkg"
+            TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
+            BACKUP_FILE="backup_\${TIMESTAMP}.tar.gz"
+
+            mkdir -p "\$BASE_DIR"
+            cd "\$BASE_DIR"
+
+            # Check if vbkg directory is not empty
+            if [ "\$(ls -A . 2>/dev/null)" ]; then
+              tar -cvzf "\$BACKUP_FILE" \
+              --exclude="*.tar.gz" \
+              ./
+            fi
+
+            echo "Backup created: \$BACKUP_FILE"
           EOF
 
       # Запуск контейнера
-      - name: Deploy Docker
+      - name: Deploy Docker Container
         id: deploy_step
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
@@ -97,15 +105,14 @@ jobs:
             docker compose down
             docker compose up --build -d
 
-            rm -f vbkg_server/vbkg-pr-cbs-ru-ssl.conf
-            rm -f nginx-proxy/conf.d/nginx.conf
-
-            # Remove old backups (keep newest)
+            # Remove old backups (select all but the last one made)
             ls -t backup_*.tar.gz | tail -n +2 | xargs -r rm -f
+
+            echo "Deployment completed."
           EOF
 
       # Rollback при ошибке
-      - name: Rollback if failed
+      - name: Rollback
         if: failure()
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
@@ -113,14 +120,32 @@ jobs:
 
             echo "Deployment failed. Starting rollback..."
 
-            LATEST_BACKUP=\$(ls -t backup_*.tar.gz | head -n 1)
+            PREV_BACKUP=\$(ls -t backup_*.tar.gz | head -n 1)
 
-            if [ -f "\$LATEST_BACKUP" ]; then
-              tar -xzf "\$LATEST_BACKUP"
+            # Remove backup of last rsync
+            ls -t backup_*.tar.gz | tail -n +2 | xargs -r rm -f
+
+            # Restore files from previous backup
+            if [ -f "\$PREV_BACKUP" ]; then
+              tar -vxzf "\$PREV_BACKUP"
               docker compose down || true
               docker compose up --build -d
               echo "Rollback completed."
             else
               echo "No backup found."
             fi
+          EOF
+
+      # Удаление фалов конфигурации
+      - name: Clean Up
+        if: always()
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+            cd ~/vbkg
+            
+            rm -f vbkg_server/vbkg-pr-cbs-ru-ssl.conf
+            rm -f nginx-proxy/conf.d/nginx.conf
+            rm -f .env
+
+            echo "Cleanup completed."
           EOF

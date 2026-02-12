@@ -16,9 +16,13 @@ services:
       - LETSENCRYPT_HOST
       # Почта для сертификации
       - LETSENCRYPT_EMAIL
+      # Порт
       - PORT
+      # Пароль администратора
       - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
+      # Ключ JWT
       - JWT_SECRET=${JWT_SECRET}
+      # URL фронтенд-статики
       - FRONTEND_URL=${FRONTEND_URL}
     volumes:
       # Монтируем том для хранения данных

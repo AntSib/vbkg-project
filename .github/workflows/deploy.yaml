@@ -95,13 +95,12 @@ jobs:
             set -e
 
             BASE_DIR="\$HOME/vbkg"
-            BACKUP_DIR="\$BASE_DIR/vbkg_backup"
+            BACKUP_DIR="\$HOME/vbkg_backup"
             TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
             BACKUP_FILE="backup_\${TIMESTAMP}.tar.gz"
 
             mkdir -p "\$BASE_DIR"
             mkdir -p "\$BACKUP_DIR"
-            cd "\$BASE_DIR"
 
             # Check if vbkg directory is not empty
             if [ "\$(ls -A "\$BASE_DIR" 2>/dev/null)" ]; then

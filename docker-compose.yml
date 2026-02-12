@@ -1,8 +1,5 @@
 services:
   library-events:
-  # TODO:
-  #   - Упаковать файлы в отдельную директорию
-  #   - добавить $DEFAULT_EMAIL на сервере
     build:
       context: ./vbkg_server
       dockerfile: vbkg.Dockerfile
@@ -19,20 +16,24 @@ services:
       - LETSENCRYPT_HOST
       # Почта для сертификации
       - LETSENCRYPT_EMAIL
+      # Порт
       - PORT
+      # Пароль администратора
       - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
+      # Ключ JWT
       - JWT_SECRET=${JWT_SECRET}
+      # URL фронтенд-статики
       - FRONTEND_URL=${FRONTEND_URL}
     volumes:
       # Монтируем том для хранения данных
       - db_data:/usr/src/app/data
       # Монтируем .env файл из хост-системы
-      - /vbkg/.env:/usr/src/app/server/.env
+      - .env:/usr/src/app/server/.env
       # Монтируем том для хранения изображений
       - server_uploads:/usr/src/app/server/uploads    
-    # restart: unless-stopped
+    restart: unless-stopped
 
-  nginx-proxy: # Замена nginx  на nginx-proxy для работы с acme-companion
+  nginx-proxy: # Прокси-сервер nginx-proxy для работы с acme-companion
     build:
       context: ./nginx-proxy
       dockerfile: nginx-proxy.Dockerfile
@@ -50,12 +51,9 @@ services:
       - vhost:/etc/nginx/vhost.d
       # Том для хранения статики
       - html:/usr/share/nginx/html
-    # restart: unless-stopped
+    restart: unless-stopped
 
   acme-companion: # Контейнер автоматической сертификации
-  # TODO:
-  #   - добавить $DEFAULT_EMAIL на сервере
-  #   - создать и подключить параметры из .env !!! (при развётрывании не было чтения)
     image: nginxproxy/acme-companion
     container_name: nginx-proxy-acme
     depends_on:
@@ -69,6 +67,7 @@ services:
       # Подключаем томы из nginx-proxy
       - nginx-proxy
     volumes:
+      # Том для docker events
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Том для хранения сертификатов
       - certs:/etc/nginx/certs
@@ -77,7 +76,7 @@ services:
       # Том для хранения статики
       - html:/usr/share/nginx/html
       - acme:/etc/acme.sh
-    # restart: unless-stopped
+    restart: unless-stopped
 
 volumes:
   acme:

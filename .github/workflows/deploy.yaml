@@ -104,7 +104,7 @@ jobs:
             cd "\$BASE_DIR"
 
             # Check if vbkg directory is not empty
-            if [ "\$(ls -A . 2>/dev/null)" ]; then
+            if [ "\$(ls -A "\$BASE_DIR" 2>/dev/null)" ]; then
               tar -czf "\$BACKUP_DIR/\$BACKUP_FILE" .
             fi
 

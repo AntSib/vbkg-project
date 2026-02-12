@@ -86,7 +86,7 @@ jobs:
 
             # Check if vbkg directory is not empty
             if [ "\$(ls -A . 2>/dev/null)" ]; then
-              tar -cvzf "\$BACKUP_FILE" \
+              tar -czf "\$BACKUP_FILE" \
               --exclude="*.tar.gz" \
               ./
             fi
@@ -120,15 +120,15 @@ jobs:
 
             echo "Deployment failed. Starting rollback..."
 
+            # Get the name of previous backup
+            PREV_BACKUP=\$(ls -t backup_*.tar.gz | head -n 2 | tail -n 1)
+
             # Remove backup of last rsync
             ls -t backup_*.tar.gz | head -n 1 | xargs -r rm -f
 
-            # Get the name of previous backup
-            PREV_BACKUP=\$(ls -t backup_*.tar.gz | head -n 1)
-
             # Restore files from previous backup
             if [ -f "\$PREV_BACKUP" ]; then
-              tar -vxzf "\$PREV_BACKUP"
+              tar -xzf "\$PREV_BACKUP"
               docker compose down || true
               docker compose up --build -d
               echo "Rollback completed."

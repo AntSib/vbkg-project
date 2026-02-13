@@ -37,6 +37,7 @@ jobs:
           rsync -az --delete \
             --exclude '.git' \
             --exclude '.github' \
+            --exclude 'README.md' \
             --exclude 'backup_*.tar.gz' \
             ./ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/vbkg/

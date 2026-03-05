@@ -1,0 +1,309 @@
+workflows:
+  deploy:
+    env:
+      DEPLOY_DIR: "vbkg"
+      DEPLOY_ABS_PATH: "$HOME/vbkg"
+      BACKUP_DIR: "vbkg_backup"
+      BACKUP_ABS_PATH: "$HOME/vbkg_backup"
+      TIMESTAMP: "$(date +%Y%m%d_%H%M%S)"
+
+    tasks:
+    - name: deploy
+      cubes:
+        # Подготовка системы
+        - name: setup_system
+          script:
+            - |
+              # Sourcecraft already has all required packages installed. Installation is purely healthy check.
+              apt-get update -y
+              apt-get install -y openssh-client rsync tar
+
+        # Установка SSH и known hosts
+        - name: SSH_Setup
+          script:
+            - |
+              echo "Setting up SSH keys..."
+              echo "Creating ~/.ssh directory."
+              mkdir -p ~/.ssh
+              chmod 700 ~/.ssh
+
+              echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+              chmod 600 ~/.ssh/id_rsa
+              
+              echo "Adding known hosts..."
+              ssh-keyscan -p ${{ secrets.SSH_PORT }} -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+              chmod 644 ~/.ssh/known_hosts
+
+        # Синхронизация файлов
+        - name: Rsync
+          script:
+            - |
+              {
+                echo "Starting syncronization with rsync..."
+                rsync -avz --delete \
+                  --exclude '.git' \
+                  --exclude '.gitignore' \
+                  --exclude '.sourcecraft' \
+                  --exclude '.env.example' \
+                  --exclude 'README.md' \
+                  ./ \
+                  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.DEPLOY_ABS_PATH }}/  && \
+                echo "Files synced successfully."
+
+              } || {
+                echo "Syncronization failed."
+                echo "Creating failure.reason file..."
+                touch failure.reason
+                echo "Syncronization failed." >> failure.reason
+              }
+
+        # Настройка .env
+        - name: Setup_env
+          script:
+            - |
+              if [ ! -f "failure.reason" ]; then
+                {
+                  echo "Setting up .env file..."
+
+                  echo "Establishing SSH connection..."
+                  ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+                  echo "SSH connection established."
+
+                  echo "Setting up environment variables..."
+                  chmod 755 ${{ env.DEPLOY_ABS_PATH }}
+                  cd ${{ env.DEPLOY_ABS_PATH }}
+
+                  echo "Creating .env file"
+                  touch .env
+
+                  # Function to update environment variables
+                  update_env_var () {
+                    VAR_NAME=$1
+                    VAR_VALUE=$2
+                    if grep -q "^${VAR_NAME}=" .env; then
+                      sed -i "s|^${VAR_NAME}=.*|${VAR_NAME}=${VAR_VALUE}|" .env
+                    else
+                      echo "${VAR_NAME}=${VAR_VALUE}" >> .env
+                    fi
+                  }
+
+                  echo "Setting environment variables..."
+                  update_env_var "VIRTUAL_HOST" "${{ secrets.VIRTUAL_HOST }}"
+                  update_env_var "LETSENCRYPT_HOST" "${{ secrets.LETSENCRYPT_HOST }}"
+                  update_env_var "LETSENCRYPT_EMAIL" "${{ secrets.LETSENCRYPT_EMAIL }}"
+                  update_env_var "PORT" "${{ secrets.PORT }}"
+                  update_env_var "ADMIN_PASSWORD_HASH" "${{ secrets.ADMIN_PASSWORD_HASH }}"
+                  update_env_var "JWT_SECRET" "${{ secrets.JWT_SECRET }}"
+                  update_env_var "FRONTEND_URL" "${{ secrets.FRONTEND_URL }}"
+
+                  ' && \
+                  echo "Environment variables set successfully."
+
+                } || {
+                  echo "Environment setup failed."
+                  echo "Creating failure.reason file..."
+                  touch failure.reason
+                  echo "Environment setup failed." >> failure.reason
+                }
+              else
+                echo ".env setup skipped. Reason: $(cat failure.reason)"
+              fi
+
+        # Запуск контейнера
+        - name: Building_Docker_Container
+          script:
+            - |
+              if [ ! -f "failure.reason" ]; then
+                {
+                  echo "Building docker container..."
+
+                  echo "Establishing SSH connection..."
+                  ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+                  cd ${{ env.DEPLOY_ABS_PATH }}
+
+                  docker compose down
+                  echo "Container stopped"
+                  docker compose up --build -d
+                  ' && \
+                  echo "Container started successfully."
+                  
+                } || {
+                  echo "Container start failed."
+                  echo "Creating failure.reason file..."
+                  touch failure.reason
+                  echo "Container start failed." >> failure.reason
+                }
+              else
+                echo "Deployment skipped. Reason: $(cat failure.reason)"
+              fi
+
+        # Создание бэкапа
+        - name: Create_Backup
+          script:
+            - |
+              if [ ! -f "failure.reason" ]; then
+                {
+                  echo "Creating backup..."
+
+                  echo "Establishing SSH connection..."
+                  ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+
+                  BACKUP_FILE="backup_${{ env.TIMESTAMP }}.tar.gz.enc"
+
+                  echo "Creating directories..."
+                  
+                  mkdir -p "${{ env.BACKUP_DIR }}"
+                  mkdir -p "${{ env.DEPLOY_DIR }}"
+
+                  echo "Backing up files..."
+
+                  # Check if DEPLOY_DIR (vbkg) directory is not empty
+                  if [ "$(ls -A "${{ env.DEPLOY_DIR }}" 2>/dev/null)" ]; then
+                    # Create encrypted backup
+                    tar -cvzf - -C "${{ env.DEPLOY_DIR }}" . | \
+                    openssl enc -aes-256-cbc -salt -pbkdf2 -pass pass:"${{ secrets.BACKUP_PASSWORD }}" -out "${{ env.BACKUP_DIR }}/$BACKUP_FILE"
+
+                    echo "Backup created successfully: $BACKUP_FILE in ${{ env.BACKUP_DIR }}"
+
+                  else
+                    echo "Directory ${{ env.DEPLOY_DIR }} is empty."
+                    echo "Unable to create backup."
+                    exit 1
+
+                  fi
+                  '
+                } || {
+                  echo "Backup creation failed with error."
+                  echo "Creating failure.reason file..."
+                  touch failure.reason
+                  echo "Backup creation failed." >> failure.reason
+                }
+              else
+                echo "Backup creation skipped. Reason: $(cat failure.reason)"
+              fi
+
+        # Удаление старых бэкапов
+        - name: Delete_Old_Backups
+          needs: ['Building_Docker_Container', 'Create_Backup']
+          script:
+            - |
+              if [ ! -f "failure.reason" ]; then
+                {
+                  echo "Deleting old backups..."
+
+                  echo "Establishing SSH connection..."
+                  ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+
+                  cd ${{ env.BACKUP_ABS_PATH }}
+                  ls -t backup_*.tar.gz* | tail -n +2 | xargs -r rm -f
+
+                  ' && \
+                  echo "Old backups deleted successfully."
+
+                } || {
+                  echo "Backup deletion failed."
+                  echo "Creating failure.reason file..."
+                  touch failure.reason
+                  echo "Backup deletion failed." >> failure.reason
+                }
+              else
+                echo "Backup deletion skipped. Reason: $(cat failure.reason)"
+              fi
+
+        # Откат к предыдущей версии
+        - name: Rollback
+          script:
+            - |
+              if [ -f "failure.reason" ]; then
+                echo "Deployment failed. Reason: $(cat failure.reason)"
+
+                echo "Starting rollback..."
+
+                ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+
+                # Get the name of last backup with known timestamp
+                LAST_BACKUP=$(ls -t ${{ env.BACKUP_ABS_PATH }}/backup_${{ env.TIMESTAMP }}.tar.gz* | head -n 1)
+
+                if [ -f "$LAST_BACKUP" ]; then
+                  echo "Removing last backup with known timestamp: $LAST_BACKUP"
+                  rm -f $LAST_BACKUP
+
+                else
+                  echo "Last backup with known timestamp not found."
+                fi
+
+                # Check how many backups exist
+                count=$(ls ${{ env.BACKUP_ABS_PATH }}/*.tar.gz* 2>/dev/null | wc -l)
+
+                if [ "$count" -eq 1 ]; then
+                  echo "Only one backup exists. This is likely the stable version."
+
+                elif [ "$count" -ge 1 ]; then
+                  echo "Multiple backups exist."
+                  echo "Folder content: $(ls -l ${{ env.BACKUP_ABS_PATH }})"
+                
+                else
+                  echo "No backups found."
+                  exit 1
+                fi
+
+                # Get the name of stable backup
+                STABLE_BACKUP=$(ls -t ${{ env.BACKUP_ABS_PATH }}/backup_*.tar.gz* | head -n 1)
+                echo "Last awailable backup: $STABLE_BACKUP"
+
+                if [ -f "$STABLE_BACKUP" ]; then
+                  # Decrypt and extract backup
+                  openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${{ secrets.BACKUP_PASSWORD }}" -in "${{ env.BACKUP_DIR }}/$BACKUP_FILE" | \
+                  tar -xvzf - -C "${{ env.DEPLOY_DIR }}" --overwrite
+
+                  cd ${{ env.DEPLOY_ABS_PATH }}
+
+                  docker compose down || true
+                  docker compose up --build -d
+
+                  cd $HOME
+
+                  echo "Rollback completed."
+
+                else
+                  echo "No backup found."
+                fi
+                '
+              else
+                echo "Deployment successful."
+                echo "No Rollback required."
+              fi
+
+        # Копирование файла с причиной ошибки на сервер
+        - name: Copy_Failure_Reason
+          needs: ['Rollback']
+          script:
+            - |
+              if [ -f "failure.reason" ]; then
+                echo "Copying failure.reason file to server..."
+                scp failure.reason ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.DEPLOY_DIR }}/failure.reason.on.deploy
+                echo "File copied successfully."
+                
+              else
+                echo "Deployment successful. Skipping file copy."
+              fi
+
+        - name: Clean_Up
+          script:
+            - |
+              echo "Starting clean up..."
+
+              echo "Establishing SSH connection..."
+              ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+
+              cd ${{ env.DEPLOY_ABS_PATH }}
+              
+              echo "Cleaning up..."
+              rm -f vbkg_server/vbkg-pr-cbs-ru-ssl.conf
+              rm -f nginx-proxy/conf.d/nginx.conf
+              rm -f .env
+              echo "Cleanup completed."
+              '
+
+on:
+  push: deploy

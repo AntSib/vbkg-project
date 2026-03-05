@@ -1,0 +1,62 @@
+name: CI & Deploy
+
+on:
+  push:
+    branches:
+      - production
+
+# TODO Jobs list
+# - checkout
+# - setup-ssh (add SSH key to server and repo secrets)
+# - make dir vbkg on server
+# - change dir to vbkg
+# - setup? .env file
+# - backup container/files (tar)
+# - scp or rsync? files
+# - docker compose down
+# - docker compose up --build
+# - ???
+# - profit
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      # Синхронизация репозитория на сервер
+      - name: Sync project to server
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.github' \
+            ./ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:${{ secrets.DEPLOY_PATH }}
+        env:
+          RSYNC_RSH: "ssh -p ${{ secrets.SSH_PORT }}"
+
+      # Запуск docker-compose на сервере
+      - name: Run docker-compose on server
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+              set -e
+              cd ${{ secrets.DEPLOY_PATH }}
+
+              docker-compose pull --ignore-pull-failures || true
+              docker-compose up -d --build
+          EOF

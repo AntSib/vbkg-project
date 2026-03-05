@@ -1,0 +1,10 @@
+.env
+index_last.html
+acme
+certs
+certs2
+node_modules/
+npm-debug.log*
+
+.vscode
+PRIVATE-NOTES.md

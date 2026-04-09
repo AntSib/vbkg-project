@@ -1,3 +1,5 @@
+process.env.TZ = 'Europe/Moscow';
+
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const express = require('express');

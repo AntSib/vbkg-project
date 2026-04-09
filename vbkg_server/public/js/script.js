@@ -8,35 +8,102 @@ document.addEventListener('DOMContentLoaded', function() {
 	let tooltip = document.getElementById('eventTooltip');
 	let tooltipTitle = document.getElementById('tooltipTitle');
 	let tooltipDescription = document.getElementById('tooltipDescription');
-    let calendarEl = document.getElementById('calendar');
-    let calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        locale: 'ru',
-		contentHeight: 'auto',
-		dayHeaderFormat: { weekday: 'short' }, // Короткие названия дней недели
-		height: 'auto',
-		fixedWeekCount: true, // Не показывать части следующего месяца
-        headerToolbar: false,
-        allDaySlot: false,
-		dayMaxEvents: true, // Показывать "+2 еще" если много событий
-			eventTimeFormat: {
-			hour: '2-digit',
-			minute: '2-digit',
-			hour12: false
-		},
-		eventClick: function(info) {
-            showEventInfo(info.event);
-        },
-        events: function(fetchInfo, successCallback, failureCallback) {
-            loadEvents(fetchInfo.start, fetchInfo.end, successCallback);
-        },
-		eventMouseEnter: function(info) {
-			showEventTooltip(info.event, info.jsEvent);
-		},
-		eventMouseLeave: function() {
-			hideEventTooltip();
+	let calendarEl = document.getElementById('calendar');
+	let calendar = null;
+
+	// Проверяем, существует ли элемент календаря
+	if (!calendarEl) {
+		console.error('Ошибка: элемент с id "calendar" не найден на странице');
+	} else {
+		// Проверяем, загружен ли FullCalendar
+		if (typeof FullCalendar === 'undefined') {
+			console.error('Ошибка: FullCalendar не загружен. Проверьте подключение скриптов');
+		} else {
+			try {
+				calendar = new FullCalendar.Calendar(calendarEl, {
+					timeZone: 'Europe/Moscow',
+					initialView: 'dayGridMonth',
+					locale: 'ru',
+					contentHeight: 'auto',
+					dayHeaderFormat: { 
+						weekday: 'short' // Короткие названия дней недели
+					},
+					height: 'auto',
+					fixedWeekCount: true, // Не показывать части следующего месяца
+					headerToolbar: false,
+					allDaySlot: false,
+					dayMaxEvents: true, // Показывать "+2 еще" если много событий
+					eventTimeFormat: {
+						hour: '2-digit',
+						minute: '2-digit',
+						hour12: false
+						// Убрал timeZone отсюда, так как он уже указан глобально
+					},
+					
+					// Обработчик клика по событию
+					eventClick: function(info) {
+						if (typeof showEventInfo === 'function') {
+							showEventInfo(info.event);
+						} else {
+							console.log('Клик по событию:', info.event.title);
+							// Заглушка, если функция не определена
+							alert(`Событие: ${info.event.title}`);
+						}
+					},
+					
+					// Загрузка событий
+					events: function(fetchInfo, successCallback, failureCallback) {
+						// Проверяем наличие функции loadEvents
+						if (typeof loadEvents === 'function') {
+							try {
+								loadEvents(fetchInfo.start, fetchInfo.end, successCallback);
+							} catch (error) {
+								console.error('Ошибка в loadEvents:', error);
+								failureCallback(error);
+							}
+						} else {
+							console.warn('Функция loadEvents не определена, использую тестовые данные');
+							// Тестовые данные для проверки
+							successCallback([
+								{
+									title: 'Тестовое событие',
+									start: new Date(),
+									allDay: true,
+									className: 'free'
+								},
+								{
+									title: 'Платное событие',
+									start: new Date(new Date().setDate(new Date().getDate() + 1)),
+									className: 'paid'
+								}
+							]);
+						}
+					},
+					
+					// Ховер для событий (появление тултипа)
+					eventMouseEnter: function(info) {
+						if (typeof showEventTooltip === 'function') {
+							showEventTooltip(info.event, info.jsEvent);
+						}
+					},
+					
+					// Убираем тултип
+					eventMouseLeave: function() {
+						if (typeof hideEventTooltip === 'function') {
+							hideEventTooltip();
+						}
+					}
+				});
+				
+				// Рендерим календарь
+				calendar.render();
+				console.log('Календарь успешно инициализирован');
+				
+			} catch (error) {
+				console.error('Ошибка при инициализации календаря:', error);
+			}
 		}
-    });
+	}
 	
 	let adminToken = null; // Будем хранить токен после входа
 	let copiedImages = []; // переменная скопированных изображений
@@ -356,6 +423,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			day: '2-digit',
 			month: '2-digit',
 			year: 'numeric',
+			timeZone: 'Europe/Moscow',
 			hour: '2-digit',
 			minute: '2-digit'
 		  }).replace(',', '');
@@ -747,6 +815,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			//Ручное форматирование чтобы избежать влияния часовых поясов
 			const formatTime = (date) => {
 				return date.toLocaleTimeString('ru-RU', {
+					timeZone: 'Europe/Moscow',
 					hour: '2-digit',
 					minute: '2-digit'
 				});
@@ -875,6 +944,7 @@ document.addEventListener('DOMContentLoaded', function() {
 						day: '2-digit',
 						month: '2-digit', 
 						year: 'numeric',
+						timeZone: 'Europe/Moscow',
 						hour: '2-digit',
 						minute: '2-digit'
 					})}</td>
@@ -955,6 +1025,7 @@ document.addEventListener('DOMContentLoaded', function() {
 							day: '2-digit',
 							month: '2-digit',
 							year: 'numeric',
+							timeZone: 'Europe/Moscow',
 							hour: '2-digit',
 							minute: '2-digit'
 						}
@@ -1075,6 +1146,7 @@ document.addEventListener('DOMContentLoaded', function() {
 								day: '2-digit',
 								month: '2-digit',
 								year: 'numeric',
+								timeZone: 'Europe/Moscow',
 								hour: '2-digit',
 								minute: '2-digit'
 							}
@@ -1346,7 +1418,8 @@ document.addEventListener('DOMContentLoaded', function() {
 						day: '2-digit',
 						month: '2-digit',
 						year: 'numeric',
-						hour: '2-digit', 
+						timeZone: 'Europe/Moscow',
+						hour: '2-digit',
 						minute: '2-digit'
 					})}</td>
 					<td>${booking.userName || 'Не указано'}</td>
@@ -1837,6 +1910,7 @@ document.addEventListener('DOMContentLoaded', function() {
 					day: '2-digit',
 					month: '2-digit',
 					year: 'numeric',
+					timeZone: 'Europe/Moscow',
 					hour: '2-digit',
 					minute: '2-digit'
 				});
